@@ -131,31 +131,7 @@ jobs:
           path: trivy-report.txt
 
   # ═══════════════════════════════════════════════════════════
-  # Job 5 — Push métriques Trivy → Pushgateway
-  # ═══════════════════════════════════════════════════════════
-  push-metrics:
-    name: Push Metrics (Observabilité)
-    runs-on: ubuntu-latest
-    needs: cve-scan
-    if: always()
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download rapport Trivy
-        uses: actions/download-artifact@v4
-        with:
-          name: trivy-report
-
-      - name: Push métriques vers Pushgateway
-        env:
-          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
-          CIS_CONTROLS: "15"
-          PIPELINE_STATUS: ${{ needs.cve-scan.result == 'success' && '1' || '0' }}
-        run: bash scripts/push_metrics.sh trivy-report.txt
-
-  # ═══════════════════════════════════════════════════════════
-  # Job 6 — DAST (ZAP Baseline)
+  # Job 5 — DAST (ZAP Baseline)
   # Lance un conteneur nginx cible, puis ZAP baseline scan
   # ═══════════════════════════════════════════════════════════
   dast:

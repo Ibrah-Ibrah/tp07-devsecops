@@ -10,14 +10,13 @@ if [[ "${1:-}" != "" && -f "$1" ]]; then
   REPORT="$1"
   CVE_CRITICAL=$(grep -oP 'CRITICAL: \K[0-9]+' "$REPORT" | awk '{s+=$1} END {print s+0}')
   CVE_HIGH=$(grep -oP 'HIGH: \K[0-9]+' "$REPORT" | awk '{s+=$1} END {print s+0}')
+  PIPELINE_STATUS=$(( CVE_CRITICAL == 0 && CVE_HIGH == 0 ? 1 : 0 ))
   echo "[INFO] Rapport Trivy parsé : CRITICAL=${CVE_CRITICAL} HIGH=${CVE_HIGH}"
 else
   CVE_CRITICAL="${CVE_CRITICAL:-0}"
   CVE_HIGH="${CVE_HIGH:-0}"
+  PIPELINE_STATUS="${PIPELINE_STATUS:-1}"
 fi
-
-# 1 = succès, 0 = échec — passé explicitement par le CI ou déduit des CVE
-PIPELINE_STATUS="${PIPELINE_STATUS:-$(( CVE_CRITICAL == 0 && CVE_HIGH == 0 ? 1 : 0 ))}"
 
 CIS_CONTROLS="${CIS_CONTROLS:-15}"
 
