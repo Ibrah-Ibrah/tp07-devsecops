@@ -1,0 +1,177 @@
+{
+  "title": "TP07 — DevSecOps Pipeline",
+  "uid": "tp07-devsecops",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Contrôles CIS L1 appliqués",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "green", "value": 15 }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        }
+      },
+      "targets": [
+        {
+          "expr": "cis_controls_applied_total{image=\"ubuntu-cis\"}",
+          "legendFormat": "Contrôles CIS"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "CVE Critiques",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "expr": "cve_critical_count{image=\"ubuntu-cis\"}",
+          "legendFormat": "CVE Critiques"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "CVE High",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "expr": "cve_high_count{image=\"ubuntu-cis\"}",
+          "legendFormat": "CVE High"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Statut Pipeline",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "ÉCHEC" }, "1": { "text": "SUCCÈS" } } }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "pipeline_quality_score{pipeline=\"ci-devsecops\"}",
+          "legendFormat": "Pipeline"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Historique CVE Critiques",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "expr": "cve_critical_count{image=\"ubuntu-cis\"}",
+          "legendFormat": "Critiques"
+        },
+        {
+          "expr": "cve_high_count{image=\"ubuntu-cis\"}",
+          "legendFormat": "High"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Historique Contrôles CIS",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "short",
+          "min": 0,
+          "max": 15
+        }
+      },
+      "targets": [
+        {
+          "expr": "cis_controls_applied_total{image=\"ubuntu-cis\"}",
+          "legendFormat": "Contrôles CIS L1"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+---
+- name: Durcissement CIS Level 1 — Ubuntu 22.04 LTS
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+  pre_tasks:
+    - name: Mettre à jour le cache apt
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+  roles:
+    - cis-l1
+
+  post_tasks:
+    - name: Résumé du durcissement CIS L1
+      ansible.builtin.debug:
+        msg: "Durcissement CIS Level 1 terminé — {{ ansible_distribution }} {{ ansible_distribution_version }}"

@@ -1,0 +1,461 @@
+---
+# =============================================================================
+# CIS Ubuntu Linux 22.04 LTS Benchmark — Level 1
+# 15 contrôles de durcissement
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Préparer les répertoires système absents de l'image Docker minimale
+# -----------------------------------------------------------------------------
+- name: "PRÉPARER | Créer les répertoires système requis"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - /etc/modprobe.d
+    - /etc/audit
+    - /etc/audit/rules.d
+    - /etc/sysctl.d
+    - /etc/rsyslog.d
+    - /etc/security
+    - /var/log
+
+# -----------------------------------------------------------------------------
+# Mise à jour de sécurité — corriger les CVE avant durcissement
+# -----------------------------------------------------------------------------
+- name: "SÉCURITÉ | Mettre à jour les paquets pour corriger les CVE connus"
+  ansible.builtin.apt:
+    upgrade: dist
+    update_cache: true
+
+# -----------------------------------------------------------------------------
+# Contrôle 1 — Désactiver les filesystems inutiles (CIS 1.1.1)
+# -----------------------------------------------------------------------------
+- name: "CIS 1.1 | Bloquer le chargement des filesystems inutiles"
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/cis-filesystems.conf
+    content: |
+      install cramfs /bin/true
+      install freevxfs /bin/true
+      install jffs2 /bin/true
+      install hfs /bin/true
+      install hfsplus /bin/true
+      install squashfs /bin/true
+      install udf /bin/true
+    mode: "0644"
+    owner: root
+    group: root
+
+# -----------------------------------------------------------------------------
+# Contrôle 2 — Mises à jour automatiques de sécurité (CIS 1.9)
+# -----------------------------------------------------------------------------
+- name: "CIS 1.9 | Installer unattended-upgrades"
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+
+- name: "CIS 1.9 | Activer les mises à jour automatiques"
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+    owner: root
+    group: root
+
+# -----------------------------------------------------------------------------
+# Contrôle 3 — Configuration sudo (CIS 5.3)
+# -----------------------------------------------------------------------------
+- name: "CIS 5.3 | Installer sudo"
+  ansible.builtin.apt:
+    name: sudo
+    state: present
+
+- name: "CIS 5.3 | Activer requiretty dans sudoers"
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: '^Defaults.*requiretty'
+    line: "Defaults    requiretty"
+    validate: "visudo -cf %s"
+    backup: true
+
+- name: "CIS 5.3 | Supprimer NOPASSWD des entrées sudoers"
+  ansible.builtin.replace:
+    path: /etc/sudoers
+    regexp: 'NOPASSWD\s*:\s*'
+    replace: ''
+    backup: true
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 4 — Interdire la connexion SSH root (CIS 5.2.10)
+# -----------------------------------------------------------------------------
+- name: "CIS 5.2.10 | Installer openssh-server"
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+
+- name: "CIS 5.2.10 | Désactiver PermitRootLogin"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: "PermitRootLogin no"
+    backup: true
+  notify: Redémarrer SSH
+
+# -----------------------------------------------------------------------------
+# Contrôle 5 — Durcissement SSH (CIS 5.2)
+# -----------------------------------------------------------------------------
+- name: "CIS 5.2 | Appliquer les paramètres SSH sécurisés"
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} CIS SSH Hardening"
+    block: |
+      Protocol 2
+      MaxAuthTries 4
+      IgnoreRhosts yes
+      HostbasedAuthentication no
+      PermitEmptyPasswords no
+      PermitUserEnvironment no
+      Ciphers aes128-ctr,aes192-ctr,aes256-ctr
+      MACs hmac-sha2-256,hmac-sha2-512
+      ClientAliveInterval 300
+      ClientAliveCountMax 0
+      LoginGraceTime 60
+    backup: true
+  notify: Redémarrer SSH
+
+# -----------------------------------------------------------------------------
+# Contrôle 6 — Désactiver les protocoles réseau inutiles (CIS 3.x)
+# -----------------------------------------------------------------------------
+- name: "CIS 3.x | Bloquer les protocoles réseau non sécurisés"
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/cis-network-protocols.conf
+    content: |
+      install dccp /bin/true
+      install sctp /bin/true
+      install rds /bin/true
+      install tipc /bin/true
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: "CIS 3.x | Supprimer les paquets réseau non sécurisés"
+  ansible.builtin.apt:
+    name:
+      - telnet
+      - rsh-client
+      - talk
+    state: absent
+    purge: true
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 7 — Activer auditd (CIS 4.1)
+# -----------------------------------------------------------------------------
+- name: "CIS 4.1 | Installer auditd"
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+
+- name: "CIS 4.1 | Déployer les règles auditd CIS"
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/cis.rules
+    content: |
+      # Modifications de l'heure système
+      -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
+      -w /etc/localtime -p wa -k time-change
+      # Modifications de l'identité
+      -w /etc/group -p wa -k identity
+      -w /etc/passwd -p wa -k identity
+      -w /etc/shadow -p wa -k identity
+      -w /etc/sudoers -p wa -k identity
+      # Locale système
+      -a always,exit -F arch=b64 -S sethostname -S setdomainname -k system-locale
+      -w /etc/hosts -p wa -k system-locale
+      # Chargement de modules noyau
+      -w /sbin/insmod -p x -k modules
+      -w /sbin/rmmod -p x -k modules
+      -w /sbin/modprobe -p x -k modules
+      # Verrouiller la configuration auditd
+      -e 2
+    mode: "0600"
+    owner: root
+    group: root
+
+- name: "CIS 4.1 | Activer auditd au démarrage"
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: true
+    state: started
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 8 — Permissions sur les fichiers critiques (CIS 6.1)
+# -----------------------------------------------------------------------------
+- name: "CIS 6.1 | Permissions /etc/passwd (644)"
+  ansible.builtin.file:
+    path: /etc/passwd
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: "CIS 6.1 | Permissions /etc/shadow (000)"
+  ansible.builtin.file:
+    path: /etc/shadow
+    owner: root
+    group: shadow
+    mode: "0000"
+
+- name: "CIS 6.1 | Permissions /etc/group (644)"
+  ansible.builtin.file:
+    path: /etc/group
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: "CIS 6.1 | Permissions /etc/gshadow (000)"
+  ansible.builtin.file:
+    path: /etc/gshadow
+    owner: root
+    group: shadow
+    mode: "0000"
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 9 — Désactiver les comptes système inutiles (CIS 5.4)
+# -----------------------------------------------------------------------------
+- name: "CIS 5.4 | Verrouiller les comptes système sans shell valide"
+  ansible.builtin.user:
+    name: "{{ item }}"
+    shell: /sbin/nologin
+    password_lock: true
+  loop:
+    - daemon
+    - bin
+    - sys
+    - games
+    - man
+    - lp
+    - mail
+    - news
+    - uucp
+    - proxy
+    - www-data
+    - backup
+    - list
+    - irc
+    - gnats
+    - nobody
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 10 — Politique de mots de passe (CIS 5.4.1 / 5.4.4)
+# -----------------------------------------------------------------------------
+- name: "CIS 5.4.1 | Configurer /etc/login.defs"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: true
+  loop:
+    - { regexp: '^PASS_MAX_DAYS', line: 'PASS_MAX_DAYS   90' }
+    - { regexp: '^PASS_MIN_DAYS', line: 'PASS_MIN_DAYS   7' }
+    - { regexp: '^PASS_WARN_AGE', line: 'PASS_WARN_AGE   14' }
+    - { regexp: '^UMASK', line: 'UMASK           027' }
+
+- name: "CIS 5.4.1 | Installer libpam-pwquality"
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+
+- name: "CIS 5.4.1 | Configurer la complexité des mots de passe"
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    create: true
+    mode: "0644"
+  loop:
+    - { regexp: '^minlen', line: 'minlen = 14' }
+    - { regexp: '^dcredit', line: 'dcredit = -1' }
+    - { regexp: '^ucredit', line: 'ucredit = -1' }
+    - { regexp: '^ocredit', line: 'ocredit = -1' }
+    - { regexp: '^lcredit', line: 'lcredit = -1' }
+
+# -----------------------------------------------------------------------------
+# Contrôle 11 — Pare-feu ufw (CIS 3.5)
+# -----------------------------------------------------------------------------
+- name: "CIS 3.5 | Installer ufw"
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: "CIS 3.5 | Politique ufw — deny incoming, allow outgoing"
+  ansible.builtin.shell: |
+    ufw --force reset
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp
+    ufw --force enable
+  args:
+    executable: /bin/bash
+  changed_when: false
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 12 — Désactiver IPv6 (CIS 3.x)
+# -----------------------------------------------------------------------------
+- name: "CIS 3.x | Désactiver IPv6 via sysctl"
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-cis-ipv6.conf
+    content: |
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+      net.ipv6.conf.lo.disable_ipv6 = 1
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: "CIS 3.x | Désactiver IPv6 dans GRUB"
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX='
+    line: 'GRUB_CMDLINE_LINUX="ipv6.disable=1"'
+    backup: true
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 13 — Limites système et durcissement noyau (CIS 1.5)
+# -----------------------------------------------------------------------------
+- name: "CIS 1.5 | Configurer les limites système"
+  ansible.builtin.blockinfile:
+    path: /etc/security/limits.conf
+    marker: "# {mark} CIS Security Limits"
+    block: |
+      * hard core 0
+      * hard maxlogins 10
+      * soft nofile 1024
+      * hard nofile 65535
+      root hard core 0
+    create: true
+    mode: "0644"
+
+- name: "CIS 1.5 | Paramètres sysctl de durcissement noyau"
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-cis-kernel.conf
+    content: |
+      # Désactiver les redirections IP
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv4.conf.all.secure_redirects = 0
+      net.ipv4.conf.default.secure_redirects = 0
+      # Désactiver le routage IP
+      net.ipv4.ip_forward = 0
+      # Protection contre les SYN floods
+      net.ipv4.tcp_syncookies = 1
+      # Désactiver le core dump SUID
+      fs.suid_dumpable = 0
+      # ASLR — randomisation de l'espace d'adressage
+      kernel.randomize_va_space = 2
+    mode: "0644"
+    owner: root
+    group: root
+
+# -----------------------------------------------------------------------------
+# Contrôle 14 — Activer rsyslog (CIS 4.2)
+# -----------------------------------------------------------------------------
+- name: "CIS 4.2 | Installer rsyslog"
+  ansible.builtin.apt:
+    name: rsyslog
+    state: present
+
+- name: "CIS 4.2 | Configurer rsyslog"
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/60-cis.conf
+    content: |
+      auth,authpriv.*                 /var/log/auth.log
+      *.*;auth,authpriv.none          /var/log/syslog
+      daemon.*                        /var/log/daemon.log
+      kern.*                          /var/log/kern.log
+      mail.*                          /var/log/mail.log
+      user.*                          /var/log/user.log
+    mode: "0640"
+    owner: root
+    group: adm
+
+- name: "CIS 4.2 | Activer rsyslog au démarrage"
+  ansible.builtin.systemd:
+    name: rsyslog
+    enabled: true
+    state: started
+  ignore_errors: true # noqa: ignore-errors
+
+# -----------------------------------------------------------------------------
+# Contrôle 15 — Permissions des fichiers cron (CIS 5.1)
+# -----------------------------------------------------------------------------
+- name: "CIS 5.1 | Installer cron"
+  ansible.builtin.apt:
+    name: cron
+    state: present
+
+- name: "CIS 5.1 | Permissions /etc/crontab (600)"
+  ansible.builtin.file:
+    path: /etc/crontab
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: "CIS 5.1 | Permissions des répertoires cron (700)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+    state: directory
+  loop:
+    - /etc/cron.hourly
+    - /etc/cron.daily
+    - /etc/cron.weekly
+    - /etc/cron.monthly
+    - /etc/cron.d
+
+- name: "CIS 5.1 | Restreindre crontab à root uniquement"
+  ansible.builtin.copy:
+    dest: /etc/cron.allow
+    content: "root\n"
+    mode: "0600"
+    owner: root
+    group: root
+
+- name: "CIS 5.1 | Supprimer /etc/cron.deny"
+  ansible.builtin.file:
+    path: /etc/cron.deny
+    state: absent
+
+# -----------------------------------------------------------------------------
+# Nettoyage final — ne pas inclure de clés privées dans l'image
+# -----------------------------------------------------------------------------
+- name: "SÉCURITÉ | Supprimer les clés SSH host générées au build"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/ssh/ssh_host_rsa_key
+    - /etc/ssh/ssh_host_rsa_key.pub
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ecdsa_key.pub
+    - /etc/ssh/ssh_host_ed25519_key
+    - /etc/ssh/ssh_host_ed25519_key.pub

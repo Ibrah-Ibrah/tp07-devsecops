@@ -1,0 +1,13 @@
+*.tar.gz
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.ansible/
+*.retry
+node_modules/
+package-lock.json
+package.json
+.claude/
+CLAUDE.md
+PLAYWRIGHT_SCREENSHOTS.md
