@@ -16,7 +16,7 @@
         "graphMode": "none",
         "textMode": "auto"
       },
-      "fieldConfig": {
+      "fieldConfig": { 
         "defaults": {
           "thresholds": {
             "mode": "absolute",

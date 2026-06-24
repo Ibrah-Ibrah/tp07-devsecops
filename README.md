@@ -134,7 +134,7 @@ tp07-devsecops/
 │   └── push_metrics.sh                 # Envoi métriques vers Pushgateway
 └── screenshots/output/                 # Captures de démonstration
 ```
-
+ 
 ---
 
 ## 3. Étape 1 — Construction de l'image durcie
