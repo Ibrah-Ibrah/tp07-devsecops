@@ -23,13 +23,6 @@
     - /etc/security
     - /var/log
 
-# -----------------------------------------------------------------------------
-# Mise à jour de sécurité — corriger les CVE avant durcissement
-# -----------------------------------------------------------------------------
-- name: "SÉCURITÉ | Mettre à jour les paquets pour corriger les CVE connus"
-  ansible.builtin.apt:
-    upgrade: dist
-    update_cache: true
 
 # -----------------------------------------------------------------------------
 # Contrôle 1 — Désactiver les filesystems inutiles (CIS 1.1.1)
