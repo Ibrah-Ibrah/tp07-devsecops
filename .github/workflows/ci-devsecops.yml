@@ -120,7 +120,6 @@ jobs:
           image-ref: ubuntu-cis:latest
           exit-code: "1"
           severity: "CRITICAL,HIGH"
-          ignore-unfixed: true
           format: table
           output: trivy-report.txt
 
