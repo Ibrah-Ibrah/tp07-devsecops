@@ -8,8 +8,8 @@ JOB="devsecops_scan"
 # Si un fichier rapport Trivy est passé en argument, on parse les vrais résultats
 if [[ "${1:-}" != "" && -f "$1" ]]; then
   REPORT="$1"
-  CVE_CRITICAL=$(grep -oP 'CRITICAL: \K[0-9]+' "$REPORT" | awk '{s+=$1} END {print s+0}')
-  CVE_HIGH=$(grep -oP 'HIGH: \K[0-9]+' "$REPORT" | awk '{s+=$1} END {print s+0}')
+  CVE_CRITICAL=$(grep -oE 'CRITICAL: [0-9]+' "$REPORT" | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')
+  CVE_HIGH=$(grep -oE 'HIGH: [0-9]+' "$REPORT" | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')
   PIPELINE_STATUS=$(( CVE_CRITICAL == 0 && CVE_HIGH == 0 ? 1 : 0 ))
   echo "[INFO] Rapport Trivy parsé : CRITICAL=${CVE_CRITICAL} HIGH=${CVE_HIGH}"
 else
