@@ -491,7 +491,7 @@ semgrep scan --config=auto --error .
 
 C'est le **composant central du shift-left security** dans ce pipeline.
 
-**Trivy** (`aquasecurity/trivy-action`) scanne l'image `ubuntu-cis:latest` après le build Packer contre les bases de données CVE (NVD, GHSA, Ubuntu USN). Il est configuré avec `exit-code: 1` sur les sévérités `CRITICAL` et `HIGH` avec `ignore-unfixed: true`.
+**Trivy** (`aquasecurity/trivy-action`) scanne l'image `ubuntu-cis:latest` après le build Packer contre les bases de données CVE (NVD, GHSA, Ubuntu USN). Il est configuré avec `exit-code: 1` sur les sévérités `CRITICAL` et `HIGH` — toutes les CVE sont remontées, y compris celles sans correctif disponible.
 
 ```yaml
 - name: Trivy — scan CVE bloquant CRITICAL/HIGH
@@ -500,26 +500,19 @@ C'est le **composant central du shift-left security** dans ce pipeline.
     image-ref: ubuntu-cis:latest
     exit-code: "1"
     severity: "CRITICAL,HIGH"
-    ignore-unfixed: true
 ```
 
-**Pourquoi c'est du shift-left ?** Sans ce gate, une CVE haute sévérité peut traverser le pipeline, atteindre la production, et n'être découverte que lors d'un audit de sécurité des semaines plus tard. Avec `exit-code 1`, la détection est immédiate, le coût du correctif est minimal (une ligne dans le playbook Ansible), et l'image ne peut pas être signée ni publiée tant que la CVE n'est pas résolue.
+**Pourquoi c'est du shift-left ?** Sans ce gate, une CVE haute sévérité peut traverser le pipeline, atteindre la production, et n'être découverte que lors d'un audit de sécurité des semaines plus tard. Avec `exit-code 1`, la détection est immédiate et l'image ne peut pas être signée ni publiée tant que la CVE n'est pas résolue.
 
-**Démonstration du blocage** — le pipeline a été volontairement déclenché avant la correction d'une CVE HIGH (CVE dans OpenSSL) pour documenter le comportement bloquant :
+**Démonstration du blocage** — le scan détecte **CVE-2026-45447** (HIGH) sur `libssl3` dans l'image Ubuntu 22.04 de base. Le pipeline s'arrête immédiatement, les jobs `dast` et `sign-push` ne s'exécutent pas :
 
 ![Trivy — pipeline bloqué sur CVE HIGH](screenshots/output/07_trivy_bloquant_cve.png)
 
 ![Rapport Trivy dans les logs GitHub Actions](screenshots/output/08_trivy_rapport_logs.png)
 
-**Correction appliquée** — ajout d'un `apt upgrade dist` en début de playbook Ansible pour mettre à jour tous les paquets avant durcissement. Trivy passe sans CVE critique ni haute :
-
-![Trivy — 0 vulnérabilité après correction](screenshots/output/07b_trivy_zero_cve.png)
-
-**Pipeline entièrement vert :**
-
 ![Liste des runs GitHub Actions](screenshots/output/06_pipeline_liste_run.png)
 
-![Détail du run — tous les jobs verts](screenshots/output/06b_pipeline_run_detail.png)
+![Détail du run — job CVE bloquant](screenshots/output/06b_pipeline_run_detail.png)
 
 ---
 
@@ -620,26 +613,24 @@ docker compose -f observability/docker-compose.yml up -d
 
 ### Métriques poussées vers Pushgateway
 
-Le script `scripts/push_metrics.sh` envoie les métriques de sécurité au Pushgateway après chaque build. Prometheus les collecte, Grafana les visualise.
-
-| Métrique | Valeur | Description |
-|----------|--------|-------------|
-| `cis_controls_applied_total` | 15 | Nombre de contrôles CIS L1 appliqués |
-| `trivy_critical_cve_count` | 0 | CVE critiques détectées |
-| `trivy_high_cve_count` | 0 | CVE hautes détectées |
-| `pipeline_status` | 1 | Statut global du pipeline (1=succès) |
+Le script `scripts/push_metrics.sh` parse le **vrai rapport Trivy** généré par la pipeline et envoie les métriques réelles au Pushgateway. Prometheus les collecte, Grafana les visualise.
 
 ```bash
-# Extrait de push_metrics.sh
-curl -s --data-binary @- http://localhost:9091/metrics/job/devsecops <<EOF
-# HELP cis_controls_applied_total Nombre de contrôles CIS Level 1 appliqués
-# TYPE cis_controls_applied_total gauge
-cis_controls_applied_total 15
-trivy_critical_cve_count 0
-trivy_high_cve_count 0
-pipeline_status 1
-EOF
+# Télécharger le rapport du dernier run CI
+gh run download --repo Ibrah-Ibrah/tp07-devsecops --name trivy-report --dir /tmp/trivy-fresh
+
+# Pousser les métriques réelles vers Pushgateway
+bash scripts/push_metrics.sh /tmp/trivy-fresh/trivy-report.txt
 ```
+
+Le script extrait automatiquement les compteurs du rapport et calcule le statut pipeline :
+
+| Métrique | Valeur actuelle | Description |
+|----------|--------|-------------|
+| `cis_controls_applied_total` | 15 | Contrôles CIS L1 appliqués |
+| `cve_critical_count` | 0 | CVE critiques détectées |
+| `cve_high_count` | 1 | CVE hautes détectées (CVE-2026-45447) |
+| `pipeline_quality_score` | 0 | Statut pipeline (0=échec, 1=succès) |
 
 ### Prometheus — Targets et requêtes
 
@@ -656,7 +647,7 @@ Le dashboard Grafana (`observability/grafana/dashboard.json`) visualise en temps
 - Le nombre de CVE critiques et hautes détectées à chaque build
 - Le statut du dernier pipeline
 
-![Grafana — tableau de bord sécurité](screenshots/output/17_grafana_explore.png)
+![Grafana — tableau de bord sécurité](screenshots/output/17_grafana_dashboard.png)
 
 ---
 
@@ -674,7 +665,7 @@ Le dashboard Grafana (`observability/grafana/dashboard.json`) visualise en temps
 | Signature Cosign keyless (Sigstore / Fulcio) | ✅ |
 | Image publiée sur Docker Hub | ✅ |
 | Stack Prometheus + Grafana + Pushgateway opérationnelle | ✅ |
-| Correction des vulnérabilités détectées (SSH keys + CVE HIGH) | ✅ |
+| Gate CVE bloquant démontré (CVE-2026-45447 HIGH sur libssl3) | ✅ |
 
 ### Ce que ce projet démontre
 
