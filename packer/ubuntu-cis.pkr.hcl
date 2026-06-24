@@ -9,7 +9,7 @@ packer {
 
 variable "base_image" {
   description = "Image de base Ubuntu"
-  default     = "ubuntu:20.04"
+  default     = "ubuntu:22.04"
 }
 
 variable "image_name" {
