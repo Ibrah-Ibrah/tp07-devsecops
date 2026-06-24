@@ -71,8 +71,8 @@ async function shot(page, filename, description) {
   await page.waitForTimeout(2500);
   await shot(page, '17b_grafana_dashboards_liste.png', 'Grafana dashboards');
 
-  await page.goto('http://localhost:3000/d/tp07-devsecops/tp07-e28094-devsecops-pipeline');
-  await page.waitForTimeout(5000);
+  await page.goto('http://localhost:3000/d/tp07-devsecops/tp07-e28094-devsecops-pipeline?kiosk=tv&refresh=5s');
+  await page.waitForTimeout(8000);
   await shot(page, '17_grafana_dashboard.png', 'Dashboard TP07 DevSecOps');
 
   await browser.close();
